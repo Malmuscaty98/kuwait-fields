@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/mohammedalmuscaty/Desktop/Booking init)",
+      "Bash(git -C /Users/mohammedalmuscaty/Desktop/Booking status)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbopack)"
+    ]
+  }
+}
