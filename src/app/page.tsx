@@ -43,7 +43,7 @@ export default function LandingPage() {
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4">
             احجز ملعبك
             <br />
-            <span className="text-green-300">وانطلق اللعب</span>
+            <span className="text-green-300">وانطلق للعب</span>
           </h1>
           <p className="text-lg md:text-xl text-green-100 max-w-xl mx-auto mb-10">
             أسهل طريقة لحجز ملاعب كرة القدم في الكويت — بضغطة واحدة
