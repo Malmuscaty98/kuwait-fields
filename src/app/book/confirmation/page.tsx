@@ -1,5 +1,12 @@
 import Link from 'next/link';
-import { getBookingByRef, getFieldById, getSlotById } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
+import type { FieldSize } from '@/lib/types';
+
+const GRADIENTS = [
+  'from-green-600 to-green-800',
+  'from-emerald-500 to-teal-700',
+  'from-teal-600 to-cyan-800',
+];
 
 function formatTime12(t: string) {
   const [h, m] = t.split(':').map(Number);
@@ -19,29 +26,44 @@ export default async function ConfirmationPage({
   searchParams: Promise<{ ref?: string }>;
 }) {
   const { ref } = await searchParams;
-  const booking = ref ? getBookingByRef(ref) : null;
-  const field = booking ? getFieldById(booking.fieldId) : null;
-  const slot = booking ? getSlotById(booking.slotId) : null;
 
-  if (!booking || !field || !slot) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="text-6xl mb-4">😕</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">الحجز غير موجود</h1>
-        <p className="text-gray-500 mb-6 text-center">تعذر العثور على تفاصيل الحجز</p>
-        <Link
-          href="/book"
-          className="bg-green-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-green-700 transition-colors"
-        >
-          حجز جديد
-        </Link>
-      </div>
-    );
-  }
+  if (!ref) return <NotFound />;
+
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('ref', ref)
+    .single();
+
+  if (!booking) return <NotFound />;
+
+  const [{ data: slot }, { data: allFields }] = await Promise.all([
+    supabase.from('slots').select('*').eq('id', booking.slot_id).single(),
+    supabase.from('fields').select('*').order('created_at'),
+  ]);
+
+  if (!slot || !allFields) return <NotFound />;
+
+  const fieldIndex = allFields.findIndex(f => f.id === booking.field_id);
+  const fieldRaw = allFields[fieldIndex];
+  if (!fieldRaw) return <NotFound />;
+
+  const field = {
+    nameAr: fieldRaw.name_ar as string,
+    locationAr: fieldRaw.location_ar as string,
+    pricePerHour: Number(fieldRaw.price_per_hour),
+    size: (fieldRaw.size ?? 'full') as FieldSize,
+    gradient: GRADIENTS[fieldIndex % GRADIENTS.length],
+  };
+
+  const startTime = (slot.start_time as string).slice(0, 5);
+  const endTime = (slot.end_time as string).slice(0, 5);
+
+  const sizeLabel =
+    field.size === '5v5' ? '٥ × ٥' : field.size === '7v7' ? '٧ × ٧' : 'ملعب كامل';
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
-      {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 h-14 flex items-center">
         <h1 className="font-bold text-gray-900 text-lg">تأكيد الحجز</h1>
       </div>
@@ -65,20 +87,16 @@ export default async function ConfirmationPage({
         {/* Details card */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">تفاصيل الحجز</p>
-
           <div className="space-y-3">
             <DetailRow label="الملعب" value={field.nameAr} />
             <DetailRow label="الموقع" value={field.locationAr} />
-            <DetailRow label="نوع الملعب" value={field.size === '5v5' ? '٥ × ٥' : field.size === '7v7' ? '٧ × ٧' : '١١ × ١١'} />
+            <DetailRow label="نوع الملعب" value={sizeLabel} />
             <div className="border-t border-gray-100 pt-3">
-              <DetailRow label="التاريخ" value={formatDateAr(slot.date)} />
-              <DetailRow
-                label="الوقت"
-                value={`${formatTime12(slot.startTime)} — ${formatTime12(slot.endTime)}`}
-              />
+              <DetailRow label="التاريخ" value={formatDateAr(slot.date as string)} />
+              <DetailRow label="الوقت" value={`${formatTime12(startTime)} — ${formatTime12(endTime)}`} />
             </div>
             <div className="border-t border-gray-100 pt-3">
-              <DetailRow label="الاسم" value={booking.customerName} />
+              <DetailRow label="الاسم" value={booking.customer_name} />
               <DetailRow label="الهاتف" value={booking.phone} dir="ltr" />
             </div>
             {booking.notes && (
@@ -89,7 +107,7 @@ export default async function ConfirmationPage({
             <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
               <span className="text-sm text-gray-500">المبلغ المدفوع</span>
               <div>
-                <span className="text-2xl font-extrabold text-green-600">{field.pricePerHour}</span>
+                <span className="text-2xl font-extrabold text-green-600">{field.pricePerHour.toFixed(3)}</span>
                 <span className="text-gray-400 text-sm"> د.ك</span>
               </div>
             </div>
@@ -113,7 +131,6 @@ export default async function ConfirmationPage({
           </div>
         </div>
 
-        {/* Support */}
         <div className="bg-green-50 rounded-2xl p-4 flex items-center gap-4">
           <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-xl">🎧</span>
@@ -131,6 +148,22 @@ export default async function ConfirmationPage({
           العودة للرئيسية
         </Link>
       </div>
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="text-6xl mb-4">😕</div>
+      <h1 className="text-xl font-bold text-gray-900 mb-2">الحجز غير موجود</h1>
+      <p className="text-gray-500 mb-6 text-center">تعذر العثور على تفاصيل الحجز</p>
+      <Link
+        href="/book"
+        className="bg-green-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-green-700 transition-colors"
+      >
+        حجز جديد
+      </Link>
     </div>
   );
 }

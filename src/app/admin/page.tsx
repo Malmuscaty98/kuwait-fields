@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
-import { getTodayStats, getBookings, getFieldById, getSlotById } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
+import type { BookingStatus, FieldSize } from '@/lib/types';
+
+const GRADIENTS = [
+  'from-green-600 to-green-800',
+  'from-emerald-500 to-teal-700',
+  'from-teal-600 to-cyan-800',
+];
 
 function formatTime12(t: string) {
   const [h, m] = t.split(':').map(Number);
@@ -9,16 +16,54 @@ function formatTime12(t: string) {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-export default function AdminDashboard() {
-  const stats = getTodayStats();
+export default async function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
-  const todayBookings = getBookings(today).slice(0, 5);
+
+  const [{ data: todaySlots }, { data: allFields }] = await Promise.all([
+    supabase.from('slots').select('id, is_open, bookings(id)').eq('date', today),
+    supabase.from('fields').select('*').order('created_at'),
+  ]);
+
+  const todaySlotIds = (todaySlots ?? []).map(s => s.id);
+  const fieldMap = Object.fromEntries(
+    (allFields ?? []).map((f, i) => [f.id, { ...f, gradient: GRADIENTS[i % GRADIENTS.length], size: (f.size ?? 'full') as FieldSize }])
+  );
+
+  const { data: bookingsRaw } = todaySlotIds.length > 0
+    ? await supabase
+        .from('bookings')
+        .select('*')
+        .in('slot_id', todaySlotIds)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    : { data: [] };
+
+  const todayBookings = bookingsRaw ?? [];
+
+  const slotIds = [...new Set(todayBookings.map(b => b.slot_id))];
+  const { data: slotsRaw } = slotIds.length > 0
+    ? await supabase.from('slots').select('id, start_time, end_time').in('id', slotIds)
+    : { data: [] };
+  const slotMap = Object.fromEntries((slotsRaw ?? []).map(s => [s.id, s]));
+
+  // Stats
+  const openSlots = (todaySlots ?? []).filter(s => s.is_open && (s.bookings as { id: string }[]).length === 0).length;
+  const { data: allTodayBookings } = todaySlotIds.length > 0
+    ? await supabase.from('bookings').select('id, status, field_id').in('slot_id', todaySlotIds)
+    : { data: [] };
+
+  const totalBookings = allTodayBookings?.length ?? 0;
+  const confirmedBookings = allTodayBookings?.filter(b => b.status === 'confirmed').length ?? 0;
+  const revenue = (allTodayBookings ?? [])
+    .filter(b => b.status === 'confirmed' || b.status === 'done')
+    .reduce((sum, b) => sum + Number(fieldMap[b.field_id]?.price_per_hour ?? 0), 0)
+    .toFixed(3);
 
   const STAT_CARDS = [
     {
       label: 'حجوزات اليوم',
-      value: stats.totalBookings,
-      sub: `${stats.confirmedBookings} مؤكد`,
+      value: totalBookings,
+      sub: `${confirmedBookings} مؤكد`,
       bg: 'bg-green-50',
       textColor: 'text-green-700',
       icon: (
@@ -29,7 +74,7 @@ export default function AdminDashboard() {
     },
     {
       label: 'الإيرادات اليوم',
-      value: `${stats.revenue} د.ك`,
+      value: `${revenue} د.ك`,
       sub: 'المبالغ المحصلة',
       bg: 'bg-blue-50',
       textColor: 'text-blue-700',
@@ -41,7 +86,7 @@ export default function AdminDashboard() {
     },
     {
       label: 'مواعيد متاحة',
-      value: stats.openSlots,
+      value: openSlots,
       sub: 'في اليوم',
       bg: 'bg-amber-50',
       textColor: 'text-amber-700',
@@ -93,8 +138,8 @@ export default function AdminDashboard() {
         ) : (
           <div className="divide-y divide-gray-50">
             {todayBookings.map(booking => {
-              const field = getFieldById(booking.fieldId);
-              const slot = getSlotById(booking.slotId);
+              const field = fieldMap[booking.field_id];
+              const slot = slotMap[booking.slot_id];
               return (
                 <Link
                   key={booking.id}
@@ -104,19 +149,19 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-3 lg:gap-4 flex-1 min-w-0">
                     <div className="w-10 h-10 lg:w-12 lg:h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <span className="text-green-700 font-bold text-sm lg:text-base">
-                        {booking.customerName.charAt(0)}
+                        {booking.customer_name.charAt(0)}
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm lg:text-base truncate">{booking.customerName}</p>
+                      <p className="font-semibold text-gray-900 text-sm lg:text-base truncate">{booking.customer_name}</p>
                       <p className="text-xs lg:text-sm text-gray-400 mt-0.5">
-                        {field?.nameAr} •{' '}
-                        {slot ? `${formatTime12(slot.startTime)} — ${formatTime12(slot.endTime)}` : '—'}
+                        {field?.name_ar ?? '—'} •{' '}
+                        {slot ? `${formatTime12(slot.start_time.slice(0, 5))} — ${formatTime12(slot.end_time.slice(0, 5))}` : '—'}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 mr-3">
-                    <Badge status={booking.status} />
+                    <Badge status={booking.status as BookingStatus} />
                     <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>

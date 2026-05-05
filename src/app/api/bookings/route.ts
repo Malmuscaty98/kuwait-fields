@@ -1,21 +1,61 @@
 import { NextResponse } from 'next/server';
-import { getBookings, createBooking } from '@/lib/store';
-import type { BookingStatus } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import type { Booking, BookingStatus } from '@/lib/types';
 
-export function GET(req: Request) {
+function dbToBooking(row: Record<string, unknown>): Booking {
+  return {
+    id: row.id as string,
+    ref: row.ref as string,
+    fieldId: row.field_id as string,
+    slotId: row.slot_id as string,
+    customerName: row.customer_name as string,
+    phone: row.phone as string,
+    notes: (row.notes as string) ?? undefined,
+    status: row.status as BookingStatus,
+    createdAt: row.created_at as string,
+  };
+}
+
+function generateRef(): string {
+  return 'KW' + Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get('date') ?? undefined;
-  const status = (searchParams.get('status') ?? undefined) as BookingStatus | undefined;
+  const date = searchParams.get('date');
+  const status = searchParams.get('status');
   const ref = searchParams.get('ref');
 
   if (ref) {
-    const { getBookingByRef } = require('@/lib/store');
-    const booking = getBookingByRef(ref);
-    if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json(booking);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('ref', ref)
+      .single();
+    if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json(dbToBooking(data as Record<string, unknown>));
   }
 
-  return NextResponse.json(getBookings(date, status));
+  let query = supabase
+    .from('bookings')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (status) query = query.eq('status', status);
+
+  if (date) {
+    const { data: slots } = await supabase
+      .from('slots')
+      .select('id')
+      .eq('date', date);
+    const slotIds = (slots ?? []).map(s => s.id);
+    if (slotIds.length === 0) return NextResponse.json([]);
+    query = query.in('slot_id', slotIds);
+  }
+
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json((data ?? []).map(r => dbToBooking(r as Record<string, unknown>)));
 }
 
 export async function POST(req: Request) {
@@ -24,9 +64,33 @@ export async function POST(req: Request) {
   if (!fieldId || !slotId || !customerName || !phone) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
-  const booking = createBooking({ fieldId, slotId, customerName, phone, notes });
-  if (!booking) {
+
+  const { data: slot } = await supabase
+    .from('slots')
+    .select('id, is_open, bookings(id)')
+    .eq('id', slotId)
+    .single();
+
+  const booked = (slot?.bookings as { id: string }[] | undefined)?.length ?? 0;
+  if (!slot || !slot.is_open || booked > 0) {
     return NextResponse.json({ error: 'Slot not available' }, { status: 409 });
   }
-  return NextResponse.json(booking, { status: 201 });
+
+  const ref = generateRef();
+  const { data, error } = await supabase
+    .from('bookings')
+    .insert({
+      ref,
+      field_id: fieldId,
+      slot_id: slotId,
+      customer_name: customerName,
+      phone,
+      notes: notes || null,
+      status: 'pending',
+    })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(dbToBooking(data as Record<string, unknown>), { status: 201 });
 }
