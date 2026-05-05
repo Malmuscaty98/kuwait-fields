@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 
 const NAV = [
   { href: '/admin', label: 'لوحة التحكم', icon: (
@@ -22,6 +24,18 @@ const NAV = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
+  const router = useRouter();
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push('/auth/signin');
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -63,13 +77,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Footer */}
-        <div className="p-5 border-t border-gray-100">
+        <div className="p-5 border-t border-gray-100 space-y-2">
           <Link href="/" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             العودة للموقع
           </Link>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 text-sm text-red-400 hover:text-red-600 transition-colors w-full"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            تسجيل الخروج
+          </button>
         </div>
       </aside>
 
