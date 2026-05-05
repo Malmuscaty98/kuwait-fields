@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import { getFields } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 
 const FEATURES = [
   { icon: '⚡', title: 'حجز فوري', desc: 'احجز ملعبك في ثوانٍ معدودة بدون انتظار أو مكالمات' },
@@ -14,8 +14,33 @@ const STEPS = [
   { num: '٣', title: 'احجز والعب', desc: 'سجّل بياناتك وتأكيد الحجز فوري' },
 ];
 
-export default function LandingPage() {
-  const fields = getFields();
+const GRADIENTS = [
+  'from-green-600 to-green-800',
+  'from-emerald-500 to-teal-700',
+  'from-teal-600 to-cyan-800',
+];
+
+const DEFAULT_FEATURES = [
+  ['إضاءة ليلية', 'عشب اصطناعي', 'غرف تبديل'],
+  ['ملاعب متعددة', 'كافيتيريا', 'معدات تأجير'],
+  ['مقياس دولي', 'مدرجات للجماهير', 'غرف VIP'],
+];
+
+export default async function LandingPage() {
+  const { data: rows } = await supabase
+    .from('fields')
+    .select('*')
+    .order('created_at');
+
+  const fields = (rows ?? []).map((r, i) => ({
+    id: r.id as string,
+    nameAr: r.name_ar as string,
+    locationAr: r.location_ar as string,
+    pricePerHour: Number(r.price_per_hour),
+    size: (r.size ?? 'full') as string,
+    gradient: GRADIENTS[i % GRADIENTS.length],
+    features: DEFAULT_FEATURES[i % DEFAULT_FEATURES.length],
+  }));
 
   return (
     <div className="min-h-screen bg-white">
@@ -24,7 +49,6 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative pt-14 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-green-900 via-green-700 to-emerald-500" />
-        {/* Field lines decoration */}
         <div className="absolute inset-0 opacity-10">
           <svg viewBox="0 0 400 300" className="w-full h-full" preserveAspectRatio="xMidYMid slice">
             <rect x="20" y="20" width="360" height="260" fill="none" stroke="white" strokeWidth="3" />
@@ -62,7 +86,6 @@ export default function LandingPage() {
               تعرف على الملاعب
             </a>
           </div>
-          {/* Stats bar */}
           <div className="mt-16 grid grid-cols-3 gap-4 max-w-md mx-auto">
             {[['٣+', 'ملاعب'], ['٧٠٠+', 'حجز شهرياً'], ['٤.٩', 'تقييم المستخدمين']].map(([num, label]) => (
               <div key={label} className="bg-white/15 backdrop-blur-sm rounded-2xl py-4 px-2">
@@ -72,7 +95,6 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-        {/* Wave */}
         <div className="relative">
           <svg viewBox="0 0 1440 60" className="w-full block" preserveAspectRatio="none">
             <path d="M0,60 C360,0 1080,0 1440,60 L1440,60 L0,60 Z" fill="white" />
@@ -102,7 +124,6 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-6">
             {fields.map(field => (
               <div key={field.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 group">
-                {/* Field image / gradient */}
                 <div className={`h-44 bg-gradient-to-br ${field.gradient} relative flex items-end p-4`}>
                   <div className="absolute inset-0 opacity-20">
                     <svg viewBox="0 0 200 150" className="w-full h-full" preserveAspectRatio="xMidYMid slice">
@@ -124,7 +145,7 @@ export default function LandingPage() {
                     {field.locationAr}
                   </p>
                   <div className="flex flex-wrap gap-1.5 mt-3">
-                    {field.features.slice(0, 3).map(feat => (
+                    {field.features.map(feat => (
                       <span key={feat} className="bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full font-medium">
                         {feat}
                       </span>
