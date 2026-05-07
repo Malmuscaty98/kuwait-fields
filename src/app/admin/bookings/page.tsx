@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
+import { createBrowserClient } from '@supabase/ssr';
 import type { Booking, BookingStatus, Field, Slot } from '@/lib/types';
 
 function formatTime12(t: string) {
@@ -30,32 +31,61 @@ export default function AdminBookingsPage() {
   const [filterDate, setFilterDate] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const [newCount, setNewCount] = useState(0);
 
   useEffect(() => {
     fetch('/api/fields').then(r => r.json()).then(setFields);
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
+  const fetchBookings = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     const params = new URLSearchParams();
     if (filterDate) params.set('date', filterDate);
     if (filterStatus) params.set('status', filterStatus);
-    fetch(`/api/bookings?${params}`).then(r => r.json()).then(async (data: Booking[]) => {
-      const slotIds = [...new Set(data.map(b => b.slotId))];
-      const slotData = await Promise.all(slotIds.map(id => fetch(`/api/slots/${id}`).then(r => r.json()).catch(() => null)));
-      const slotMap = Object.fromEntries(slotData.filter(Boolean).map((s: Slot) => [s.id, s]));
-      const fieldMap = Object.fromEntries(fields.map(f => [f.id, f]));
-      setBookings(data.map(b => ({ ...b, _field: fieldMap[b.fieldId], _slot: slotMap[b.slotId] })));
-      setLoading(false);
-    });
+    const data: Booking[] = await fetch(`/api/bookings?${params}`).then(r => r.json());
+    const slotIds = [...new Set(data.map(b => b.slotId))];
+    const slotData = await Promise.all(slotIds.map(id => fetch(`/api/slots/${id}`).then(r => r.json()).catch(() => null)));
+    const slotMap = Object.fromEntries(slotData.filter(Boolean).map((s: Slot) => [s.id, s]));
+    const fieldMap = Object.fromEntries(fields.map(f => [f.id, f]));
+    setBookings(data.map(b => ({ ...b, _field: fieldMap[b.fieldId], _slot: slotMap[b.slotId] })));
+    setLoading(false);
   }, [filterDate, filterStatus, fields]);
+
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const channel = supabase
+      .channel('admin-bookings-list')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings' }, () => {
+        setNewCount(n => n + 1);
+        fetchBookings(true);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings' }, () => {
+        fetchBookings(true);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchBookings]);
 
   return (
     <div>
       <div className="mb-6 lg:mb-8 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">الحجوزات</h1>
-          <p className="text-gray-500 text-sm lg:text-base mt-0.5">جميع حجوزات الملاعب</p>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">الحجوزات</h1>
+            <div className="flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              مباشر
+            </div>
+          </div>
+          <p className="text-gray-500 text-sm lg:text-base">جميع حجوزات الملاعب</p>
         </div>
         <Link
           href="/book"
@@ -67,6 +97,23 @@ export default function AdminBookingsPage() {
           حجز جديد
         </Link>
       </div>
+
+      {/* New booking toast */}
+      {newCount > 0 && (
+        <div className="bg-green-600 text-white rounded-2xl px-5 py-3 mb-4 flex items-center justify-between gap-3 animate-pulse">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="text-sm font-semibold">
+              {newCount === 1 ? 'وصل حجز جديد!' : `وصل ${newCount} حجوزات جديدة!`}
+            </span>
+          </div>
+          <button onClick={() => setNewCount(0)} className="text-white/70 hover:text-white text-xs">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 lg:p-5 mb-4 lg:mb-5 flex flex-wrap gap-3 lg:gap-4">

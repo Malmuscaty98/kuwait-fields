@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
+import RealtimeRefresher from '@/components/RealtimeRefresher';
 import { supabase } from '@/lib/supabase';
 import type { BookingStatus, FieldSize } from '@/lib/types';
 
@@ -100,11 +101,19 @@ export default async function AdminDashboard() {
 
   return (
     <div>
-      <div className="mb-6 lg:mb-8">
-        <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">لوحة التحكم</h1>
-        <p className="text-gray-500 text-sm lg:text-base mt-0.5">
-          {new Date().toLocaleDateString('ar-KW', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <RealtimeRefresher />
+
+      <div className="mb-6 lg:mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">لوحة التحكم</h1>
+          <p className="text-gray-500 text-sm lg:text-base mt-0.5">
+            {new Date().toLocaleDateString('ar-KW', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full flex-shrink-0">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          مباشر
+        </div>
       </div>
 
       {/* Stats grid */}
