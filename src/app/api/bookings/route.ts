@@ -68,19 +68,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const { data: slot } = await supabase
+  // Use server client (handles both anon and authenticated sessions via cookies)
+  const client = await createAuthServerClient();
+
+  const { data: slot } = await client
     .from('slots')
-    .select('id, is_open, bookings(id)')
+    .select('id, is_open')
     .eq('id', slotId)
     .single();
 
-  const booked = (slot?.bookings as { id: string }[] | undefined)?.length ?? 0;
-  if (!slot || !slot.is_open || booked > 0) {
+  if (!slot || !slot.is_open) {
     return NextResponse.json({ error: 'Slot not available' }, { status: 409 });
   }
 
+  // Check if already booked
+  const { count } = await client
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('slot_id', slotId);
+
+  if ((count ?? 0) > 0) {
+    return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
+  }
+
   const ref = generateRef();
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('bookings')
     .insert({
       ref,
