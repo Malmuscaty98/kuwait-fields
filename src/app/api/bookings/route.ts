@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { createAuthServerClient } from '@/lib/supabase-server';
 import type { Booking, BookingStatus } from '@/lib/types';
 
 function dbToBooking(row: Record<string, unknown>): Booking {
@@ -21,13 +22,15 @@ function generateRef(): string {
 }
 
 export async function GET(req: Request) {
+  // Use authenticated server client so RLS allows admin reads
+  const authClient = await createAuthServerClient();
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
   const status = searchParams.get('status');
   const ref = searchParams.get('ref');
 
   if (ref) {
-    const { data, error } = await supabase
+    const { data, error } = await authClient
       .from('bookings')
       .select('*')
       .eq('ref', ref)
@@ -36,15 +39,15 @@ export async function GET(req: Request) {
     return NextResponse.json(dbToBooking(data as Record<string, unknown>));
   }
 
-  let query = supabase
+  let query = authClient
     .from('bookings')
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (status) query = query.eq('status', status);
+  if (status) query = query.eq('status', status as string);
 
   if (date) {
-    const { data: slots } = await supabase
+    const { data: slots } = await authClient
       .from('slots')
       .select('id')
       .eq('date', date);

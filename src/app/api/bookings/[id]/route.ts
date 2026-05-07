@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAuthServerClient } from '@/lib/supabase-server';
 import type { Booking, BookingStatus } from '@/lib/types';
 
 function dbToBooking(row: Record<string, unknown>): Booking {
@@ -18,7 +18,8 @@ function dbToBooking(row: Record<string, unknown>): Booking {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { data, error } = await supabase
+  const authClient = await createAuthServerClient();
+  const { data, error } = await authClient
     .from('bookings')
     .select('*')
     .eq('id', id)
@@ -30,12 +31,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { data, error } = await supabase
+  const authClient = await createAuthServerClient();
+
+  // Allow status update or isOpen for slots
+  const updateData: Record<string, unknown> = {};
+  if (body.status !== undefined) updateData.status = body.status as BookingStatus;
+
+  const { data, error } = await authClient
     .from('bookings')
-    .update({ status: body.status as BookingStatus })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (error || !data) return NextResponse.json({ error: error?.message ?? 'Not found' }, { status: 404 });
   return NextResponse.json(dbToBooking(data as Record<string, unknown>));
 }
