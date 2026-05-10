@@ -4,6 +4,9 @@ import RealtimeRefresher from '@/components/RealtimeRefresher';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type { BookingStatus, FieldSize } from '@/lib/types';
 
+// Always fetch fresh data — never serve a stale static snapshot
+export const dynamic = 'force-dynamic';
+
 const GRADIENTS = [
   'from-green-600 to-green-800',
   'from-emerald-500 to-teal-700',
