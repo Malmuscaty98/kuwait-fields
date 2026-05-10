@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 import { createAuthServerClient } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Booking, BookingStatus } from '@/lib/types';
 
 function dbToBooking(row: Record<string, unknown>): Booking {
@@ -68,10 +68,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  // Use server client (handles both anon and authenticated sessions via cookies)
-  const client = await createAuthServerClient();
-
-  const { data: slot } = await client
+  // Use admin client for all server-side writes — bypasses RLS safely
+  // (validation is done in code: slot availability + duplicate check)
+  const { data: slot } = await supabaseAdmin
     .from('slots')
     .select('id, is_open')
     .eq('id', slotId)
@@ -82,7 +81,7 @@ export async function POST(req: Request) {
   }
 
   // Check if already booked
-  const { count } = await client
+  const { count } = await supabaseAdmin
     .from('bookings')
     .select('id', { count: 'exact', head: true })
     .eq('slot_id', slotId);
@@ -92,7 +91,7 @@ export async function POST(req: Request) {
   }
 
   const ref = generateRef();
-  const { data, error } = await client
+  const { data, error } = await supabaseAdmin
     .from('bookings')
     .insert({
       ref,
