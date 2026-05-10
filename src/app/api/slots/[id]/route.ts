@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Slot } from '@/lib/types';
 
 function dbToSlot(row: Record<string, unknown>): Slot {
@@ -17,7 +17,7 @@ function dbToSlot(row: Record<string, unknown>): Slot {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('slots')
     .select('id, field_id, date, start_time, end_time, is_open, bookings(id)')
     .eq('id', id)
@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('slots')
     .update({ is_open: body.isOpen })
     .eq('id', id)

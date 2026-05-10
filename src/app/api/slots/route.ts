@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Slot } from '@/lib/types';
 
 function dbToSlot(row: Record<string, unknown>): Slot {
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const fieldId = searchParams.get('fieldId');
   const date = searchParams.get('date');
 
-  let query = supabase
+  let query = supabaseAdmin
     .from('slots')
     .select('id, field_id, date, start_time, end_time, is_open, bookings(id)')
     .order('start_time');

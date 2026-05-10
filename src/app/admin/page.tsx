@@ -18,7 +18,8 @@ function formatTime12(t: string) {
 }
 
 export default async function AdminDashboard() {
-  const today = new Date().toISOString().split('T')[0];
+  // Use Kuwait timezone (UTC+3) to get the correct local date on the server
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' });
 
   const [{ data: todaySlots }, { data: allFields }] = await Promise.all([
     supabase.from('slots').select('id, is_open, bookings(id)').eq('date', today),

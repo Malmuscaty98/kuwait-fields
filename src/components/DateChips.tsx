@@ -11,6 +11,10 @@ interface DateChip {
   isToday: boolean;
 }
 
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function getNext7Days(): DateChip[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -18,7 +22,7 @@ function getNext7Days(): DateChip[] {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     return {
-      dateStr: d.toISOString().split('T')[0],
+      dateStr: localDateStr(d),
       dayName: DAY_NAMES_AR[d.getDay()],
       dayShort: DAY_NAMES_SHORT[d.getDay()],
       dayNum: d.getDate(),
