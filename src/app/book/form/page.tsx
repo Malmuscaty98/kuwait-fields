@@ -55,19 +55,36 @@ function BookFormContent() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/bookings', {
+      // Step 1: Create booking (status: pending)
+      const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fieldId, slotId, customerName: name.trim(), phone: phone.trim(), notes: notes.trim() }),
       });
-      if (!res.ok) {
-        const err = await res.json();
+      if (!bookingRes.ok) {
+        const err = await bookingRes.json();
         setError(err.error ?? 'حدث خطأ، يرجى المحاولة مجدداً');
         setLoading(false);
         return;
       }
-      const booking = await res.json();
-      router.push(`/book/confirmation?ref=${booking.ref}`);
+      const booking = await bookingRes.json();
+
+      // Step 2: Initiate Tap payment
+      const payRes = await fetch('/api/payment/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id }),
+      });
+      if (!payRes.ok) {
+        const err = await payRes.json();
+        setError(err.error ?? 'تعذر فتح صفحة الدفع، يرجى المحاولة مجدداً');
+        setLoading(false);
+        return;
+      }
+      const { paymentUrl } = await payRes.json();
+
+      // Step 3: Redirect to Tap payment page
+      window.location.href = paymentUrl;
     } catch {
       setError('حدث خطأ في الاتصال، يرجى المحاولة مجدداً');
       setLoading(false);
@@ -194,10 +211,15 @@ function BookFormContent() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                جارٍ تأكيد الحجز...
+                جارٍ التوجيه للدفع...
               </>
             ) : (
-              'تأكيد الحجز ✓'
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                الدفع الآن
+              </>
             )}
           </button>
         </form>
