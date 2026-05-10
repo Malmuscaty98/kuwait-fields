@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { FieldSize } from '@/lib/types';
 
 const GRADIENTS = [
@@ -29,7 +29,7 @@ export default async function ConfirmationPage({
 
   if (!ref) return <NotFound />;
 
-  const { data: booking } = await supabase
+  const { data: booking } = await supabaseAdmin
     .from('bookings')
     .select('*')
     .eq('ref', ref)
@@ -38,8 +38,8 @@ export default async function ConfirmationPage({
   if (!booking) return <NotFound />;
 
   const [{ data: slot }, { data: allFields }] = await Promise.all([
-    supabase.from('slots').select('*').eq('id', booking.slot_id).single(),
-    supabase.from('fields').select('*').order('created_at'),
+    supabaseAdmin.from('slots').select('*').eq('id', booking.slot_id).single(),
+    supabaseAdmin.from('fields').select('*').order('created_at'),
   ]);
 
   if (!slot || !allFields) return <NotFound />;
