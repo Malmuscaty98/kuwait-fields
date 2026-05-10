@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
 import RealtimeRefresher from '@/components/RealtimeRefresher';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type { BookingStatus, FieldSize } from '@/lib/types';
 
 const GRADIENTS = [
