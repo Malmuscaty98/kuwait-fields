@@ -33,5 +33,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  // Protect admin pages only — API routes authenticate themselves
+  // via createAuthServerClient() + getUser() inside each handler.
+  // Adding API routes here causes cookie refresh conflicts that break sessions.
+  matcher: ['/admin/:path*'],
 };
