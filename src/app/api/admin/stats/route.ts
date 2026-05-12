@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createAuthServerClient } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  // Require authenticated admin session
+  const authClient = await createAuthServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' });
 
   // Today's slots

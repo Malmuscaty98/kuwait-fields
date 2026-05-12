@@ -19,6 +19,11 @@ function dbToBooking(row: Record<string, unknown>): Booking {
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authClient = await createAuthServerClient();
+
+  // Require authenticated admin session
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { data, error } = await authClient
     .from('bookings')
     .select('*')
@@ -30,10 +35,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await req.json();
   const authClient = await createAuthServerClient();
 
-  // Allow status update or isOpen for slots
+  // Require authenticated admin session
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
   const updateData: Record<string, unknown> = {};
   if (body.status !== undefined) updateData.status = body.status as BookingStatus;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createAuthServerClient } from '@/lib/supabase-server';
 import type { Slot } from '@/lib/types';
 
 function dbToSlot(row: Record<string, unknown>): Slot {
@@ -28,6 +29,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Require authenticated admin session — this route uses service role (bypasses RLS)
+  const authClient = await createAuthServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const body = await req.json();
   const { data, error } = await supabaseAdmin
     .from('slots')
