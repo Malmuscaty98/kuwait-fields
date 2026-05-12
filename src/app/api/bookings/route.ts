@@ -80,15 +80,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Slot not available' }, { status: 409 });
   }
 
-  // Check if already booked
-  const { count } = await supabaseAdmin
+  // Block only if a confirmed/done booking exists (not pending/cancelled)
+  const { count: activeCount } = await supabaseAdmin
     .from('bookings')
     .select('id', { count: 'exact', head: true })
-    .eq('slot_id', slotId);
+    .eq('slot_id', slotId)
+    .in('status', ['confirmed', 'done']);
 
-  if ((count ?? 0) > 0) {
+  if ((activeCount ?? 0) > 0) {
     return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
   }
+
+  // Cancel any stale pending bookings for this slot before creating a new one
+  await supabaseAdmin
+    .from('bookings')
+    .update({ status: 'cancelled' })
+    .eq('slot_id', slotId)
+    .eq('status', 'pending');
 
   const ref = generateRef();
   const { data, error } = await supabaseAdmin

@@ -3,7 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Slot } from '@/lib/types';
 
 function dbToSlot(row: Record<string, unknown>): Slot {
-  const bookings = row.bookings as { id: string }[] | undefined;
+  const bookings = row.bookings as { id: string; status: string }[] | undefined;
+  // Only confirmed/done bookings actually occupy the slot
+  const activeBooking = bookings?.find(
+    b => b.status === 'confirmed' || b.status === 'done'
+  );
   return {
     id: row.id as string,
     fieldId: row.field_id as string,
@@ -11,7 +15,7 @@ function dbToSlot(row: Record<string, unknown>): Slot {
     startTime: (row.start_time as string).slice(0, 5),
     endTime: (row.end_time as string).slice(0, 5),
     isOpen: row.is_open as boolean,
-    bookingId: bookings?.[0]?.id ?? undefined,
+    bookingId: activeBooking?.id ?? undefined,
   };
 }
 
@@ -22,7 +26,7 @@ export async function GET(req: Request) {
 
   let query = supabaseAdmin
     .from('slots')
-    .select('id, field_id, date, start_time, end_time, is_open, bookings(id)')
+    .select('id, field_id, date, start_time, end_time, is_open, bookings(id, status)')
     .order('start_time');
 
   if (fieldId) query = query.eq('field_id', fieldId);
