@@ -4,7 +4,13 @@
  */
 
 const TAP_API_URL = 'https://api.tap.company/v2';
-const TAP_SECRET_KEY = process.env.TAP_SECRET_KEY!;
+
+/** Read key lazily so missing env var only fails at call time, not module load */
+function getTapKey(): string {
+  const key = process.env.TAP_SECRET_KEY;
+  if (!key) throw new Error('TAP_SECRET_KEY environment variable is not set');
+  return key;
+}
 
 export interface TapChargeResult {
   id: string;
@@ -57,7 +63,7 @@ export async function createCharge(params: CreateChargeParams): Promise<TapCharg
   const res = await fetch(`${TAP_API_URL}/charges`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${TAP_SECRET_KEY}`,
+      Authorization: `Bearer ${getTapKey()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -73,7 +79,7 @@ export async function createCharge(params: CreateChargeParams): Promise<TapCharg
 
 export async function retrieveCharge(chargeId: string): Promise<{ status: string; metadata?: { bookingRef?: string } }> {
   const res = await fetch(`${TAP_API_URL}/charges/${chargeId}`, {
-    headers: { Authorization: `Bearer ${TAP_SECRET_KEY}` },
+    headers: { Authorization: `Bearer ${getTapKey()}` },
     cache: 'no-store',
   });
 

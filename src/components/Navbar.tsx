@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import CustomerAuthButton from './CustomerAuthButton';
 
 export default function Navbar() {
   return (
@@ -13,12 +14,15 @@ export default function Navbar() {
           </div>
           <span className="font-bold text-gray-900 text-base">ملاعب الكويت</span>
         </Link>
-        <Link
-          href="/book"
-          className="bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-green-700 transition-colors"
-        >
-          احجز الآن
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/book"
+            className="bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-green-700 transition-colors hidden sm:block"
+          >
+            احجز الآن
+          </Link>
+          <CustomerAuthButton />
+        </div>
       </div>
     </nav>
   );

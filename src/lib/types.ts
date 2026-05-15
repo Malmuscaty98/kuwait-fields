@@ -5,11 +5,13 @@ export interface Field {
   id: string;
   name: string;
   nameAr: string;
+  clubAr: string;
   location: string;
   locationAr: string;
   pricePerHour: number;
   size: FieldSize;
   description: string;
+  imageUrl?: string;
   features: string[];
   gradient: string;
 }
@@ -22,6 +24,10 @@ export interface Slot {
   endTime: string;
   isOpen: boolean;
   bookingId?: string;
+  // Challenge fields (populated when an open challenge exists for this slot)
+  challengeId?: string;
+  challengeTeamName?: string;
+  challengeTeamElo?: number;
 }
 
 export interface Booking {

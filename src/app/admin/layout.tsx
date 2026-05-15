@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
@@ -29,18 +29,42 @@ const NAV = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const router = useRouter();
 
-  const supabase = createBrowserClient(
+  const [supabase] = useState(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  ));
+
+  // Verify admin role — customers cannot access /admin
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { router.replace('/auth/signin'); return; }
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.role === 'admin') {
+            setAuthorized(true);
+          } else {
+            router.replace('/');
+          }
+        });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.push('/auth/signin');
     router.refresh();
   }
+
+  // Show nothing while checking auth/role
+  if (!authorized) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">

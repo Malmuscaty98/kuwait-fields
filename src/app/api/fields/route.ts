@@ -6,6 +6,8 @@ const GRADIENTS = [
   'from-green-600 to-green-800',
   'from-emerald-500 to-teal-700',
   'from-teal-600 to-cyan-800',
+  'from-green-700 to-emerald-900',
+  'from-teal-500 to-green-700',
 ];
 
 function dbToField(row: Record<string, unknown>, index: number): Field {
@@ -13,11 +15,13 @@ function dbToField(row: Record<string, unknown>, index: number): Field {
     id: row.id as string,
     name: row.name_en as string,
     nameAr: row.name_ar as string,
+    clubAr: (row.club_ar as string) ?? '',
     location: row.location_en as string,
     locationAr: row.location_ar as string,
     pricePerHour: Number(row.price_per_hour),
     size: (row.size ?? 'full') as FieldSize,
     description: (row.description_ar as string) ?? '',
+    imageUrl: (row.image_url as string) ?? undefined,
     features: [],
     gradient: GRADIENTS[index % GRADIENTS.length],
   };

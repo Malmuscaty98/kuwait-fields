@@ -52,33 +52,43 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [realtimeOk, setRealtimeOk] = useState(false);
 
-  const fetchTransactions = useCallback(async () => {
-    setLoading(true);
+  const fetchTransactions = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true);
     // Fetch all bookings that went through Tap (have tap_charge_id)
     const res = await fetch('/api/transactions');
     if (res.ok) {
       const data: Transaction[] = await res.json();
       setTransactions(data);
     }
-    setLoading(false);
+    if (showLoader) setLoading(false);
   }, []);
 
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  // Initial load
+  useEffect(() => { fetchTransactions(true); }, [fetchTransactions]);
 
-  // Realtime updates
+  // Realtime updates via Supabase postgres_changes
   useEffect(() => {
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
     const channel = supabase
-      .channel('admin-transactions')
+      .channel('admin-transactions-v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
         fetchTransactions();
       })
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeOk(status === 'SUBSCRIBED');
+      });
     return () => { supabase.removeChannel(channel); };
+  }, [fetchTransactions]);
+
+  // Polling fallback every 8 s — catches events that realtime might miss
+  useEffect(() => {
+    const id = setInterval(() => fetchTransactions(), 8000);
+    return () => clearInterval(id);
   }, [fetchTransactions]);
 
   const filtered = filterStatus === 'all'
@@ -97,9 +107,17 @@ export default function TransactionsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 lg:mb-8">
-        <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">العمليات المدفوعة</h1>
-        <p className="text-gray-500 text-sm lg:text-base mt-0.5">جميع معاملات Tap Payments</p>
+      <div className="mb-6 lg:mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl lg:text-3xl font-extrabold text-gray-900">العمليات المدفوعة</h1>
+          <p className="text-gray-500 text-sm lg:text-base mt-0.5">جميع معاملات Tap Payments</p>
+        </div>
+        <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 mt-1 ${
+          realtimeOk ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${realtimeOk ? 'bg-green-500 animate-pulse' : 'bg-yellow-400'}`} />
+          {realtimeOk ? 'مباشر' : 'تحديث تلقائي'}
+        </div>
       </div>
 
       {/* Summary cards */}

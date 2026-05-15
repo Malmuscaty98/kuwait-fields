@@ -10,9 +10,13 @@ export async function GET(request: Request) {
     const supabase = await createAuthServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Validate next to prevent open redirects (must start with /)
+      const safePath = next.startsWith('/') ? next : '/profile';
+      return NextResponse.redirect(`${origin}${safePath}`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth/signin?error=auth_callback_error`);
+  // If no next param, default to customer profile; if it looks like admin callback use admin login
+  const errorRedirect = next.startsWith('/admin') ? '/auth/signin' : '/auth/login';
+  return NextResponse.redirect(`${origin}${errorRedirect}?error=auth_callback_error`);
 }

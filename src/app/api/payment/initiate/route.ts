@@ -23,8 +23,25 @@ export async function POST(req: Request) {
 
   if (fErr || !field) return NextResponse.json({ error: 'Field not found' }, { status: 404 });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://kuwait-fields.vercel.app';
-  const callbackUrl = `${baseUrl}/api/payment/callback`;
+  // A10 — SSRF: build callbackUrl from trusted sources only (env var or own request origin)
+  // Never allow user-supplied URLs.
+  const reqUrl = new URL(req.url);
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    `${reqUrl.protocol}//${reqUrl.host}`;
+
+  // Validate the resolved base URL is a real HTTP(S) origin (not file://, data:, etc.)
+  let callbackUrl: string;
+  try {
+    const parsed = new URL(`${baseUrl}/api/payment/callback`);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('Invalid protocol');
+    }
+    callbackUrl = parsed.toString();
+  } catch {
+    console.error('[SECURITY] Invalid callback URL derived from env/request:', baseUrl);
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
 
   try {
     const charge = await createCharge({

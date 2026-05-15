@@ -23,6 +23,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Protect /admin — redirect unauthenticated users to admin sign-in
   if (!user && request.nextUrl.pathname.startsWith('/admin')) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/signin';
@@ -33,8 +34,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Protect admin pages only — API routes authenticate themselves
-  // via createAuthServerClient() + getUser() inside each handler.
-  // Adding API routes here causes cookie refresh conflicts that break sessions.
+  // Only protect /admin here. /profile uses client-side auth check to avoid
+  // redirect loops when the session cookie hasn't propagated yet on the edge.
   matcher: ['/admin/:path*'],
 };

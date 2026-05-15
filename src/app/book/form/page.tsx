@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { createBrowserClient } from '@supabase/ssr';
 import type { Field, Slot } from '@/lib/types';
 
 function formatTime12(t: string) {
@@ -30,10 +31,45 @@ function BookFormContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Challenge mode
+  const [isChallenge, setIsChallenge] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [existingTeamName, setExistingTeamName] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  const [supabase] = useState(() =>
+    createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  );
+
   useEffect(() => {
     if (fieldId) fetch(`/api/fields?id=${fieldId}`).then(r => r.json()).then(setField);
     if (slotId) fetch(`/api/slots/${slotId}`).then(r => r.json()).then(setSlot);
   }, [fieldId, slotId]);
+
+  // Check auth + existing team
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCheckingAuth(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (user) {
+        setIsLoggedIn(true);
+        // Check if user already has a team
+        const res = await fetch('/api/teams');
+        if (!cancelled && res.ok) {
+          const team = await res.json();
+          if (team?.name) setExistingTeamName(team.name);
+        }
+      }
+      if (!cancelled) setCheckingAuth(false);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
   if (!fieldId || !slotId) {
     return (
@@ -52,6 +88,14 @@ function BookFormContent() {
       setError('يرجى إدخال الاسم ورقم الهاتف');
       return;
     }
+    if (isChallenge && !isLoggedIn) {
+      setError('يجب تسجيل الدخول لإنشاء تحدي');
+      return;
+    }
+    if (isChallenge && !existingTeamName && !teamName.trim()) {
+      setError('يرجى إدخال اسم فريقك');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -59,7 +103,15 @@ function BookFormContent() {
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fieldId, slotId, customerName: name.trim(), phone: phone.trim(), notes: notes.trim() }),
+        body: JSON.stringify({
+          fieldId,
+          slotId,
+          customerName: name.trim(),
+          phone: phone.trim(),
+          notes: notes.trim(),
+          isChallenge,
+          teamName: isChallenge ? (existingTeamName ?? teamName.trim()) : undefined,
+        }),
       });
       if (!bookingRes.ok) {
         const err = await bookingRes.json();
@@ -69,7 +121,13 @@ function BookFormContent() {
       }
       const booking = await bookingRes.json();
 
-      // Step 2: Initiate Tap payment
+      // If challenge: no payment yet — redirect to challenge page
+      if (isChallenge && booking.challengeId) {
+        router.push(`/challenges/${booking.challengeId}?created=1`);
+        return;
+      }
+
+      // Step 2: Initiate Tap payment (regular booking)
       const payRes = await fetch('/api/payment/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,6 +205,75 @@ function BookFormContent() {
           )}
         </div>
 
+        {/* Challenge toggle card */}
+        <div className={`bg-white rounded-2xl border overflow-hidden transition-all ${isChallenge ? 'border-orange-300 ring-1 ring-orange-200' : 'border-gray-100'}`}>
+          <button
+            type="button"
+            onClick={() => setIsChallenge(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚔️</span>
+              <div className="text-right">
+                <p className="font-bold text-gray-900 text-sm">وضع التحدي</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  ابحث عن منافس — سيظهر موعدك للآخرين باللون البرتقالي
+                </p>
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isChallenge ? 'bg-orange-500' : 'bg-gray-200'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isChallenge ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+          </button>
+
+          {/* Challenge info expanded */}
+          {isChallenge && (
+            <div className="px-5 pb-4 border-t border-orange-100 bg-orange-50/50">
+              <div className="pt-4 space-y-3">
+                <div className="flex items-start gap-2 text-xs text-orange-700">
+                  <span className="mt-0.5 text-base">ℹ️</span>
+                  <p>
+                    سيتم حجز الموعد ولكن <strong>لن يُؤكد حتى يقبل فريق آخر التحدي</strong>.
+                    بعد انتهاء المباراة، يتم تسجيل النتيجة وتحديث تقييم ELO لكلا الفريقين.
+                  </p>
+                </div>
+
+                {checkingAuth ? (
+                  <div className="h-4 bg-orange-100 rounded animate-pulse" />
+                ) : !isLoggedIn ? (
+                  <div className="bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl px-4 py-3">
+                    يجب{' '}
+                    <Link href="/auth/login?next=/book" className="underline font-semibold">
+                      تسجيل الدخول
+                    </Link>{' '}
+                    لاستخدام وضع التحدي
+                  </div>
+                ) : existingTeamName ? (
+                  <div className="bg-orange-100/70 rounded-xl px-4 py-3">
+                    <p className="text-xs text-orange-600">فريقك المسجّل</p>
+                    <p className="font-bold text-orange-800 mt-0.5">⚽ {existingTeamName}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-orange-700 mb-1.5">
+                      اسم فريقك <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={teamName}
+                      onChange={e => setTeamName(e.target.value)}
+                      placeholder="مثال: نسور الكويت"
+                      maxLength={60}
+                      className="w-full border border-orange-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-5 space-y-5">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">بيانات العميل</p>
@@ -202,8 +329,12 @@ function BookFormContent() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white font-bold py-4 rounded-xl hover:bg-green-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={loading || (isChallenge && !isLoggedIn)}
+            className={`w-full font-bold py-4 rounded-xl transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+              isChallenge
+                ? 'bg-orange-500 text-white hover:bg-orange-600'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
           >
             {loading ? (
               <>
@@ -211,7 +342,12 @@ function BookFormContent() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                جارٍ التوجيه للدفع...
+                جارٍ الإنشاء...
+              </>
+            ) : isChallenge ? (
+              <>
+                <span>⚔️</span>
+                نشر التحدي
               </>
             ) : (
               <>
