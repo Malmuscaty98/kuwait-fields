@@ -84,7 +84,15 @@ function LoginForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">كلمة المرور</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-semibold text-gray-700">كلمة المرور</label>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs text-green-600 hover:text-green-700 font-medium"
+                >
+                  نسيت كلمة المرور؟
+                </Link>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
